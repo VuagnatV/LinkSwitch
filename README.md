@@ -32,3 +32,10 @@ Routes
 	GET : /stats/{shortURL} :  : Prend une url raccourcie et retourne le nombre de fois que l'url à été clické
 
  	PUT : /{shortURL} : {short : string} : Prend une url raccourcie et un objet avec une url courte et modifie l'url courte 
+
+
+Auteurs
+
+	Vincent VUAGNAT
+
+  	Samir BOUKRI
