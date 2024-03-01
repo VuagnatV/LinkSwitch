@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -13,13 +14,14 @@ type mongoDB struct {
 }
 
 type URL struct {
-	Long   string `json:"long"`
-	Short  string `json:"short"`
-	Clicks int    `json:"clicks"`
+	Long           string    `json:"long"`
+	Short          string    `json:"short"`
+	Clicks         int       `json:"clicks"`
+	ExpirationDate time.Time `json:"expirationDate"`
 }
 
 type Database interface {
-	InsertOne(url URL) error
+	InsertOne(url URL) (*URL, error)
 	FindOne(shorturl string) (*URL, error)
 	Find() ([]URL, error)
 	Update(url URL) (*URL, error)
@@ -36,13 +38,14 @@ func InitMongo(databaseURL string) (Database, error) {
 	return &mongoDB{collection}, nil
 }
 
-func (e *mongoDB) InsertOne(url URL) error {
+func (e *mongoDB) InsertOne(url URL) (*URL, error) {
+
 	_, err := e.collection.InsertOne(context.Background(), url)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return &url, nil
 }
 
 func (e *mongoDB) FindOne(shorturl string) (*URL, error) {
@@ -80,9 +83,10 @@ func (e *mongoDB) Update(url URL) (*URL, error) {
 
 	update := bson.M{
 		"$set": bson.M{
-			"long":   url.Long,
-			"short":  url.Short,
-			"clicks": url.Clicks,
+			"long":            url.Long,
+			"short":           url.Short,
+			"clicks":          url.Clicks,
+			"expirartionDate": url.ExpirationDate,
 		},
 	}
 

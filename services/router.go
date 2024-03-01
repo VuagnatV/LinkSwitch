@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -20,6 +21,7 @@ func RunServer(db database.Database) http.Handler {
 		r.Get("/{shortURL}", getURL(db))
 		r.Get("/stats", getStats(db))
 		r.Get("/stats/{shortURL}", getClicks(db))
+		r.Put("/{shortURL}", changeAlias(db))
 	})
 
 	return router
@@ -42,6 +44,50 @@ func getClicks(db database.Database) http.HandlerFunc {
 	}
 }
 
+func changeAlias(db database.Database) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		shortURL := chi.URLParam(r, "shortURL")
+
+		url, err := db.FindOne(shortURL)
+		if err != nil {
+			http.Error(w, "url not found", http.StatusNotFound)
+			log.Println("url not found:", err)
+			return
+		}
+
+		var newURL database.URL
+		err = json.NewDecoder(r.Body).Decode(&newURL)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+			return
+		}
+
+		url.Short = newURL.Short
+
+		_, err = db.InsertOne(*url)
+		if err != nil {
+			http.Error(w, "Failed to create user", http.StatusInternalServerError)
+			log.Println("Failed to create user:", err)
+			return
+		}
+
+		jsonData, err := json.Marshal(url)
+		if err != nil {
+			http.Error(w, "Failed to marshal JSON", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		_, err = w.Write(jsonData)
+		if err != nil {
+			log.Println("Failed to write response:", err)
+		}
+
+	}
+}
+
 func createURL(db database.Database) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var url database.URL
@@ -57,7 +103,9 @@ func createURL(db database.Database) http.HandlerFunc {
 
 		url.Short = fmt.Sprintf("%x", hash)[:8]
 
-		err = db.InsertOne(url)
+		url.ExpirationDate = time.Now().AddDate(0, 0, 3)
+
+		_, err = db.InsertOne(url)
 		if err != nil {
 			http.Error(w, "Failed to create user", http.StatusInternalServerError)
 			log.Println("Failed to create user:", err)
@@ -88,6 +136,12 @@ func getURL(db database.Database) http.HandlerFunc {
 		if err != nil {
 			http.Error(w, "url not found", http.StatusNotFound)
 			log.Println("url not found:", err)
+			return
+		}
+
+		if url.ExpirationDate.Before(time.Now()) {
+			http.Error(w, "url has expired", http.StatusForbidden)
+			log.Println("url has expired")
 			return
 		}
 
